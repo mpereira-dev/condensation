@@ -1,15 +1,15 @@
 package lazy.dev.condensation;
 
-import com.mongodb.BasicDBObject;
-import com.mongodb.DBObject;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import org.bson.Document;
-
-import static lazy.dev.condensation.Validator.ValidationException;
+import org.bson.conversions.Bson;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.logging.Logger;
+
+import static lazy.dev.condensation.Validator.ValidationException;
 
 
 /**
@@ -17,11 +17,10 @@ import java.util.logging.Logger;
  */
 public class Generator {
 
-    private static Logger logger = Logger.getLogger("lazy.dev.condensation.Generator");
+    private static Logger logger = LoggerFactory.getLogger(Generator.class);
 
     private String collectionName;
-    private String documentTypeField;
-    private String documentTypeValue;
+    private Bson query;
     private Map<Setting,Boolean> settings;
     private MongoCollection mongoCollection;
     private Validator validator;
@@ -64,25 +63,12 @@ public class Generator {
     }
 
     /**
-     * Assign the field that will be inspected and used to filter documents in the collection.
-     * Only documents that have the specified field will be used in the schema generation.
-     * @param documentTypeField - the field to inspect.
+     * Specify a query to limit the documents that are used to generate the schema.
+     * @param query - the query to match documents.
      * @return - the generator.
      */
-    public Generator withDocumentTypeField(String documentTypeField){
-        this.documentTypeField=documentTypeField;
-        return this;
-    }
-
-    /**
-     * Assign the value that will be inspected and used to filter documents in the collection.
-     * Only documents that have the specified value set for {@link Generator#documentTypeField}
-     * will be used in schema generation.
-     * @param documentTypeValue - the field value to inspect.
-     * @return - the generator.
-     */
-    public Generator withDocumentTypeValue(String documentTypeValue){
-        this.documentTypeValue=documentTypeValue;
+    public Generator withQuery(Bson query){
+        this.query=query;
         return this;
     }
 
@@ -119,16 +105,7 @@ public class Generator {
             throw new RuntimeException("No Validator found for this Generator. Are you using the #withValidator method?");
         }
 
-        // If no documentTypeField was set generate the schema for all documents in the collection.
-        if(this.documentTypeField==null){
-            return this.generateSchema(this.getDocumentSet());
-        }
-        // If no documentTypeValue was set, only test for the presence of documentTypeField and use those documents in schema generation.
-        if(this.documentTypeValue==null){
-            return this.generateSchema(this.getDocumentSet(),this.documentTypeField);
-        }
-        // If field and value are set only use the documents who have that field set to that value in schema generation.
-        return this.generateSchema(this.getDocumentSet(),this.documentTypeField,this.documentTypeValue);
+        return this.generateSchema(this.getDocumentSet());
     }
 
     /**
@@ -138,7 +115,14 @@ public class Generator {
         collectionName = mongoCollection.getNamespace().getCollectionName();
         logger.info("Processing collection: "+ collectionName);
 
-        MongoCursor cursor = mongoCollection.find().iterator();
+        MongoCursor cursor;
+
+        if(this.query==null){
+            cursor = mongoCollection.find().iterator();// If no query is specified use all documents.
+        } else {
+            cursor = mongoCollection.find(query).iterator();
+        }
+
         Set<Document> documentSet = new HashSet<>();
 
         while(cursor.hasNext()){
@@ -162,7 +146,7 @@ public class Generator {
      * @return - the document schema.
      */
     private Document generateSchema(Set<Document> documentSet){
-        logger.info("Generating schema for collection ["+ collectionName+"]");
+        logger.info("Generating schema for collection ["+ collectionName+"] with query: "+query);
 
         Iterator<Document> iterator = documentSet.iterator();
         Document schema = null;
@@ -174,82 +158,6 @@ public class Generator {
                 Document doc = iterator.next();
 
                 if(!schema.equals(doc)){
-                    schema = this.mergeDocuments(schema,doc);
-                }
-            }
-        }
-
-        return schema;
-    }
-
-    /**
-     * Builds a document for a document set. The resulting document will contain every unique key,
-     * including nested keys, found in the document set.
-     * Use this method to generate the schema for a subset of documents in the same collection. Ex: different entities stored in one collection.
-     * If you think all the documents are from the same entity then use {@link Generator#generateSchema(Set)} instead.
-     * @param documentSet - the document set to process.
-     * @param documentTypeField - an additional field used to distinguish documents in the same collection.
-     * @return - the document schema.
-     */
-    private Document generateSchema(Set<Document> documentSet, String documentTypeField){
-        logger.info("Generating schema for collection ["+ collectionName + "] with documents that contain the field: ["+documentTypeField+"]");
-
-        Iterator<Document> iterator = documentSet.iterator();
-        Document schema = null;
-
-        while(iterator.hasNext()){
-            if(schema==null) {
-                Document doc = iterator.next();
-
-                // initialize schema
-                if(doc.containsKey(documentTypeField)){
-                    schema = doc;
-                }
-            } else {
-                Document doc = iterator.next();;
-
-                // same doc type different schema
-                if(doc.containsKey(documentTypeField) && !schema.equals(doc)){
-                    logger.info("Found a: "+documentTypeField);
-                    schema = this.mergeDocuments(schema,doc);
-                }
-            }
-        }
-
-        return schema;
-    }
-
-    /**
-     * Builds a document for a document set. The resulting document will contain every unique key,
-     * including nested keys, found in the document set.
-     * Use this method to generate the schema for a subset of documents in the same collection. Ex: different entities stored in one collection.
-     * If you think all the documents are from the same entity then use {@link Generator#generateSchema(Set)} instead.
-     * @param documentSet - the document set to process.
-     * @param documentTypeField - an additional field used to distinguish documents in the same collection.
-     * @param documentTypeValue - the value of the field to use for schema generation.
-     * @return - the document schema.
-     */
-    private Document generateSchema(Set<Document> documentSet, String documentTypeField, String documentTypeValue){
-        logger.info("Generating schema for collection ["+ collectionName +"] with documents that contain the field ["+documentTypeField+"] set to ["+documentTypeValue+"]");
-
-        Iterator<Document> iterator = documentSet.iterator();
-        Document schema = null;
-
-        while(iterator.hasNext()){
-            if(schema==null) {
-                Document doc = iterator.next();
-
-                // initialize schema
-                if(doc.containsKey(documentTypeField) && documentTypeValue.equals(doc.getString(documentTypeField))){
-                    schema = doc;
-                }
-            } else {
-                Document doc = iterator.next();
-                String docType = doc.getString(documentTypeField);
-
-                // same doc type different schema
-                if(doc.containsKey(documentTypeField) && documentTypeValue.equals(doc.getString(documentTypeField)) && !schema.equals(doc)){
-                    logger.info("Found a: "+docType);
                     schema = this.mergeDocuments(schema,doc);
                 }
             }

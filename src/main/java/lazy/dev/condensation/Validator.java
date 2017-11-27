@@ -1,9 +1,11 @@
 package lazy.dev.condensation;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Logger;
 
 /**
  * Validation class to check some assumptions about the schema.
@@ -16,7 +18,7 @@ import java.util.logging.Logger;
  */
 public class Validator {
 
-    private static Logger logger = Logger.getLogger("lazy.dev.condensation.Validator");
+    private static Logger logger = LoggerFactory.getLogger(Validator.class);
     private Map<Setting,Boolean> settings;
 
     public enum Conflict { MERGE_CONFLICT }
@@ -70,7 +72,7 @@ public class Validator {
         if(settings.get(Setting.FAIL_FAST)){
             throw new ValidationException(errorMessage);
         }
-        logger.warning(errorMessage);
+        logger.warn(errorMessage);
         return false;
     }
     /**

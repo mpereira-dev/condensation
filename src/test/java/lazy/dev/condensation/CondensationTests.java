@@ -7,10 +7,6 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.List;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 //@RunWith(SpringRunner.class)
 //@SpringBootTest(classes = { PropertyPlaceholderAutoConfiguration.class, MongoConfig.class })

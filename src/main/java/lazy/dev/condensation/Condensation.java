@@ -3,13 +3,12 @@ package lazy.dev.condensation;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import org.bson.json.JsonWriterSettings;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-
-import java.util.logging.Logger;
-
 
 /**
  *
@@ -25,7 +24,7 @@ import java.util.logging.Logger;
 @SpringBootApplication
 public class Condensation implements CommandLineRunner {
 
-    private static Logger logger = Logger.getLogger("functionals");
+    private static Logger logger = LoggerFactory.getLogger(Condensation.class);
 
     @Autowired
     MongoDatabase mongoDatabase;
@@ -36,18 +35,18 @@ public class Condensation implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         if(mongoDatabase==null){
-            logger.severe("There was an issue connecting to the MongoDatabase!");
+            logger.error("There was an issue connecting to the MongoDatabase!");
         } else {
             logger.info("DB looks good");
 
             // TODO add null handling for collection (ex bad name)
-            MongoCollection mongoCollection = mongoDatabase.getCollection("functionals");
+            MongoCollection mongoCollection = mongoDatabase.getCollection("someCollection");
 
-//            String jsonSchema = generator.forCollection(mongoCollection).generateSchema().toJson( new JsonWriterSettings(true));
+//            Bson filter = Filters.eq("someField","someValue");
+
             String jsonSchema = generator
                     .forCollection(mongoCollection)
-                    .withDocumentTypeField("componentType")
-                    .withDocumentTypeValue("conditional")
+//                    .withQuery(filter)
                     .generateSchema()
                     .toJson(new JsonWriterSettings(true));
 
