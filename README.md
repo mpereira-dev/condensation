@@ -4,6 +4,7 @@ I made this project to extract the schema from a MongoDB collection(s).
 # Quick Start
 * Set your DB properties in application.properties
 * Set the collection you wish to condense in the main class Condensation.
+* Optionally create a filter query to match on a subset of documents in the collection.
 * Run the app and get the output Json schema for your collection.
 
 # Output Format
@@ -19,6 +20,6 @@ These situations will be marked with MERGE_CONFLICT and are nothing more than pl
 * [ "a", 1, {} ] // different types in the same list
 * { "a": 1 }, { "a" : {} }// different values for the same key
 
-#Notes
+# Notes
 * DBRefs are not yet supported, they throw an exception: 
     * Caused by: org.bson.codecs.configuration.CodecConfigurationException: Can't find a codec for class com.mongodb.DBRef.

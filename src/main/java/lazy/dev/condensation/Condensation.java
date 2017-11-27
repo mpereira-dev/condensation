@@ -42,11 +42,12 @@ public class Condensation implements CommandLineRunner {
             // TODO add null handling for collection (ex bad name)
             MongoCollection mongoCollection = mongoDatabase.getCollection("someCollection");
 
-//            Bson filter = Filters.eq("someField","someValue");
+//          If you want to generate a schema with only a subset of documents, you can specify a query here.
+//          Bson filter = Filters.eq("someField","someValue");
 
             String jsonSchema = generator
                     .forCollection(mongoCollection)
-//                    .withQuery(filter)
+//                    .withQuery(filter)                            // And uncomment here to apply the query.
                     .generateSchema()
                     .toJson(new JsonWriterSettings(true));
 
