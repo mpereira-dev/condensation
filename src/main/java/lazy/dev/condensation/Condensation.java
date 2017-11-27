@@ -43,7 +43,14 @@ public class Condensation implements CommandLineRunner {
             // TODO add null handling for collection (ex bad name)
             MongoCollection mongoCollection = mongoDatabase.getCollection("functionals");
 
-            String jsonSchema = generator.forCollection(mongoCollection).generateSchema().toJson( new JsonWriterSettings(true));
+//            String jsonSchema = generator.forCollection(mongoCollection).generateSchema().toJson( new JsonWriterSettings(true));
+            String jsonSchema = generator
+                    .forCollection(mongoCollection)
+                    .withDocumentTypeField("componentType")
+                    .withDocumentTypeValue("conditional")
+                    .generateSchema()
+                    .toJson(new JsonWriterSettings(true));
+
             logger.info("\n"+jsonSchema);
         }
     }

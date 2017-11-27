@@ -1,5 +1,7 @@
 package lazy.dev.condensation;
 
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBObject;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import org.bson.Document;
@@ -18,6 +20,8 @@ public class Generator {
     private static Logger logger = Logger.getLogger("lazy.dev.condensation.Generator");
 
     private String collectionName;
+    private String documentTypeField;
+    private String documentTypeValue;
     private Map<Setting,Boolean> settings;
     private MongoCollection mongoCollection;
     private Validator validator;
@@ -60,6 +64,29 @@ public class Generator {
     }
 
     /**
+     * Assign the field that will be inspected and used to filter documents in the collection.
+     * Only documents that have the specified field will be used in the schema generation.
+     * @param documentTypeField - the field to inspect.
+     * @return - the generator.
+     */
+    public Generator withDocumentTypeField(String documentTypeField){
+        this.documentTypeField=documentTypeField;
+        return this;
+    }
+
+    /**
+     * Assign the value that will be inspected and used to filter documents in the collection.
+     * Only documents that have the specified value set for {@link Generator#documentTypeField}
+     * will be used in schema generation.
+     * @param documentTypeValue - the field value to inspect.
+     * @return - the generator.
+     */
+    public Generator withDocumentTypeValue(String documentTypeValue){
+        this.documentTypeValue=documentTypeValue;
+        return this;
+    }
+
+    /**
      * Override settings for this generator.
      * @param settings - the settings you want to override.
      * @return the generator.
@@ -84,13 +111,30 @@ public class Generator {
      * @return the document schema.
      */
     public Document generateSchema(){
-        return this.generateSchema(this.getDocumentSet());
+        // Some internal checks before schema generation.
+        if(this.mongoCollection==null){
+            throw new RuntimeException("No Mongo Collection found for this Generator. Are you using the #forCollection method?");
+        }
+        if(this.validator==null){
+            throw new RuntimeException("No Validator found for this Generator. Are you using the #withValidator method?");
+        }
+
+        // If no documentTypeField was set generate the schema for all documents in the collection.
+        if(this.documentTypeField==null){
+            return this.generateSchema(this.getDocumentSet());
+        }
+        // If no documentTypeValue was set, only test for the presence of documentTypeField and use those documents in schema generation.
+        if(this.documentTypeValue==null){
+            return this.generateSchema(this.getDocumentSet(),this.documentTypeField);
+        }
+        // If field and value are set only use the documents who have that field set to that value in schema generation.
+        return this.generateSchema(this.getDocumentSet(),this.documentTypeField,this.documentTypeValue);
     }
 
     /**
      * Get a set of unique documents in this collection.
      */
-    protected Set<Document> getDocumentSet(){
+    private Set<Document> getDocumentSet(){
         collectionName = mongoCollection.getNamespace().getCollectionName();
         logger.info("Processing collection: "+ collectionName);
 
@@ -113,32 +157,98 @@ public class Generator {
     /**
      * Builds a document for a document set. The resulting document will contain every unique key,
      * including nested keys, found in the document set.
+     * Use this method to ge
      * @param documentSet - the document set to process.
      * @return - the document schema.
      */
-    protected Document generateSchema(Set<Document> documentSet){
-        logger.info("Generating schema for: "+ collectionName);
+    private Document generateSchema(Set<Document> documentSet){
+        logger.info("Generating schema for collection ["+ collectionName+"]");
 
         Iterator<Document> iterator = documentSet.iterator();
         Document schema = null;
-        String documentType = "conditional";
+
+        while(iterator.hasNext()){
+            if(schema==null) {
+                schema = iterator.next();
+            } else {
+                Document doc = iterator.next();
+
+                if(!schema.equals(doc)){
+                    schema = this.mergeDocuments(schema,doc);
+                }
+            }
+        }
+
+        return schema;
+    }
+
+    /**
+     * Builds a document for a document set. The resulting document will contain every unique key,
+     * including nested keys, found in the document set.
+     * Use this method to generate the schema for a subset of documents in the same collection. Ex: different entities stored in one collection.
+     * If you think all the documents are from the same entity then use {@link Generator#generateSchema(Set)} instead.
+     * @param documentSet - the document set to process.
+     * @param documentTypeField - an additional field used to distinguish documents in the same collection.
+     * @return - the document schema.
+     */
+    private Document generateSchema(Set<Document> documentSet, String documentTypeField){
+        logger.info("Generating schema for collection ["+ collectionName + "] with documents that contain the field: ["+documentTypeField+"]");
+
+        Iterator<Document> iterator = documentSet.iterator();
+        Document schema = null;
 
         while(iterator.hasNext()){
             if(schema==null) {
                 Document doc = iterator.next();
-                String docType = doc.getString("componentType");
 
                 // initialize schema
-                if(documentType.equals(docType)){
+                if(doc.containsKey(documentTypeField)){
                     schema = doc;
                 }
-//                schema = iterator.next();
             } else {
-                Document doc = iterator.next();
-                String docType = doc.getString("componentType");
+                Document doc = iterator.next();;
 
                 // same doc type different schema
-                if(documentType.equals(docType) && !schema.equals(doc)){
+                if(doc.containsKey(documentTypeField) && !schema.equals(doc)){
+                    logger.info("Found a: "+documentTypeField);
+                    schema = this.mergeDocuments(schema,doc);
+                }
+            }
+        }
+
+        return schema;
+    }
+
+    /**
+     * Builds a document for a document set. The resulting document will contain every unique key,
+     * including nested keys, found in the document set.
+     * Use this method to generate the schema for a subset of documents in the same collection. Ex: different entities stored in one collection.
+     * If you think all the documents are from the same entity then use {@link Generator#generateSchema(Set)} instead.
+     * @param documentSet - the document set to process.
+     * @param documentTypeField - an additional field used to distinguish documents in the same collection.
+     * @param documentTypeValue - the value of the field to use for schema generation.
+     * @return - the document schema.
+     */
+    private Document generateSchema(Set<Document> documentSet, String documentTypeField, String documentTypeValue){
+        logger.info("Generating schema for collection ["+ collectionName +"] with documents that contain the field ["+documentTypeField+"] set to ["+documentTypeValue+"]");
+
+        Iterator<Document> iterator = documentSet.iterator();
+        Document schema = null;
+
+        while(iterator.hasNext()){
+            if(schema==null) {
+                Document doc = iterator.next();
+
+                // initialize schema
+                if(doc.containsKey(documentTypeField) && documentTypeValue.equals(doc.getString(documentTypeField))){
+                    schema = doc;
+                }
+            } else {
+                Document doc = iterator.next();
+                String docType = doc.getString(documentTypeField);
+
+                // same doc type different schema
+                if(doc.containsKey(documentTypeField) && documentTypeValue.equals(doc.getString(documentTypeField)) && !schema.equals(doc)){
                     logger.info("Found a: "+docType);
                     schema = this.mergeDocuments(schema,doc);
                 }
@@ -155,7 +265,7 @@ public class Generator {
      * @param d2 - the second document.
      * @return - the combined document.
      */
-    protected Document mergeDocuments(Document d1, Document d2){
+    private Document mergeDocuments(Document d1, Document d2){
         if(d1==null && d2==null){
             return null; // Both are null so their combination is null
         } else if(d1==null){
@@ -181,7 +291,7 @@ public class Generator {
      * @param list - the list to process
      * @return the first element of the list in a list.
      */
-    protected List truncateList(List list){
+    private List truncateList(List list){
         if(list==null || list.isEmpty()){
             return list;
         }
@@ -191,7 +301,7 @@ public class Generator {
 
 
     /** [ [], [], [] ] => */
-    protected List<List> mergeNestedList(List<List> lists){
+    private List<List> mergeNestedList(List<List> lists){
         // TODO
         throw new UnsupportedOperationException("Nested lists are not yet supported.");
 //        if(lists==null || lists.isEmpty()){
@@ -214,14 +324,14 @@ public class Generator {
         // Simple List
     }
 
-    protected List<List> mergeNestedLists(List<List> lists1, List<List> lists2){
+    private List<List> mergeNestedLists(List<List> lists1, List<List> lists2){
         // TODO actually build logic for this? or fail at Validation
         throw new UnsupportedOperationException("Nested lists are not yet supported.");
     }
 
 
     /** [{},{},{}] => [{}] **/
-    protected List<Document> mergeDocumentList(List<Document> list){
+    private List<Document> mergeDocumentList(List<Document> list){
         if(list==null || list.isEmpty()){
             return list;
         }
@@ -233,7 +343,7 @@ public class Generator {
     }
 
     /** [{},{},{}] x2 => [{}] **/
-    protected List<Document> mergeDocumentLists(List<Document> l1, List<Document> l2){
+    private List<Document> mergeDocumentLists(List<Document> l1, List<Document> l2){
         if(l1==null && l2==null){
             return null;
         } else if(l1==null){
@@ -263,7 +373,7 @@ public class Generator {
      * @param o2 - the second object.
      * @return a list containing the conflict or an empty list if no conflicts where found.
      */
-    protected List<Object> skipKnownConflicts(Object o1, Object o2){
+    private List<Object> skipKnownConflicts(Object o1, Object o2){
         List<Object> conflicts = new ArrayList<>();
         if(o1 instanceof String && o1.equals(Validator.Conflict.MERGE_CONFLICT.name())) {
             conflicts.add(o1);
@@ -280,7 +390,7 @@ public class Generator {
      * @param o2 - the second object to merge.
      * @return the merged object.
      */
-    protected Object mergeKey(String key, Object o1, Object o2) {
+    private Object mergeKey(String key, Object o1, Object o2) {
         if(o1==null && o2==null){
             return null;
         } else if(o1==null){
@@ -334,7 +444,7 @@ public class Generator {
      * @param d2 - the second document.
      * @return the resulting merged document.
      */
-    protected Document mergeExistingKeys(Document d1, Document d2){
+    private Document mergeExistingKeys(Document d1, Document d2){
         if(d1==null || d2==null){
             throw new NullPointerException("Document is null.");
         }
@@ -357,7 +467,7 @@ public class Generator {
      * @param d2 - the second document.
      * @return - the first document with the second's keys added to it.
      */
-    protected Document addMissingKeys(Document d1, Document d2) {
+    private Document addMissingKeys(Document d1, Document d2) {
         if(d1==null || d2==null){
             throw new NullPointerException("Document is null.");
         }
@@ -371,7 +481,7 @@ public class Generator {
      * @param o - the object to add to the list.
      * @return the new ArrayList
      */
-    protected ArrayList newList(Object o){
+    private ArrayList newList(Object o){
         ArrayList list = new ArrayList();
         list.add(o);
         return list;

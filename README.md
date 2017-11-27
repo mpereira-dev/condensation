@@ -18,3 +18,7 @@ These situations will be marked with MERGE_CONFLICT and are nothing more than pl
 ## Examples of incongruencies: 
 * [ "a", 1, {} ] // different types in the same list
 * { "a": 1 }, { "a" : {} }// different values for the same key
+
+#Notes
+* DBRefs are not yet supported, they throw an exception: 
+    * Caused by: org.bson.codecs.configuration.CodecConfigurationException: Can't find a codec for class com.mongodb.DBRef.
