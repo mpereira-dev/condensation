@@ -25,7 +25,7 @@ import java.util.logging.Logger;
 @SpringBootApplication
 public class Condensation implements CommandLineRunner {
 
-    private static Logger logger = Logger.getLogger("models");
+    private static Logger logger = Logger.getLogger("functionals");
 
     @Autowired
     MongoDatabase mongoDatabase;
@@ -41,7 +41,7 @@ public class Condensation implements CommandLineRunner {
             logger.info("DB looks good");
 
             // TODO add null handling for collection (ex bad name)
-            MongoCollection mongoCollection = mongoDatabase.getCollection("models");
+            MongoCollection mongoCollection = mongoDatabase.getCollection("functionals");
 
             String jsonSchema = generator.forCollection(mongoCollection).generateSchema().toJson( new JsonWriterSettings(true));
             logger.info("\n"+jsonSchema);

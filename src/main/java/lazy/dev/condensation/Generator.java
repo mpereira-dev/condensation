@@ -121,14 +121,25 @@ public class Generator {
 
         Iterator<Document> iterator = documentSet.iterator();
         Document schema = null;
+        String documentType = "conditional";
 
         while(iterator.hasNext()){
             if(schema==null) {
-                schema = iterator.next();
+                Document doc = iterator.next();
+                String docType = doc.getString("componentType");
+
+                // initialize schema
+                if(documentType.equals(docType)){
+                    schema = doc;
+                }
+//                schema = iterator.next();
             } else {
                 Document doc = iterator.next();
+                String docType = doc.getString("componentType");
 
-                if(!schema.equals(doc)){
+                // same doc type different schema
+                if(documentType.equals(docType) && !schema.equals(doc)){
+                    logger.info("Found a: "+docType);
                     schema = this.mergeDocuments(schema,doc);
                 }
             }
